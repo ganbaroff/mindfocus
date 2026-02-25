@@ -1,0 +1,30 @@
+# Environment
+.env
+*.env
+
+# Flutter
+.dart_tool/
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+*.session
+*.session-journal
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# Docker
+bot/feed.json
+bot/bot_history.json
+
+# OS
+.DS_Store
+Thumbs.db

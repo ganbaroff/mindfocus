@@ -1,0 +1,12 @@
+services:
+  mindfocus-bot:
+    build: .
+    container_name: mindfocus-bot
+    restart: always
+    ports:
+      - "8585:8585"
+    env_file:
+      - .env
+    volumes:
+      - ./bot/bot_history.json:/app/bot_history.json
+      - ./bot/feed.json:/app/feed.json

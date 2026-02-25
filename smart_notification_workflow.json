@@ -1,0 +1,108 @@
+{
+  "name": "Phase 7.1: MindFocus Smart Notification Engine",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "*/15 * * * *"
+            }
+          ]
+        }
+      },
+      "name": "Cron (15m)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        250,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "@ai_newz, @forbesrussia, @pmbasics, @vcru, @investfuture, @product_mind",
+        "operation": "get"
+      },
+      "name": "Fetch Telegram Channels (Mock)",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [
+        450,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const text = (item.message || '').toLowerCase();\nlet score = 5;\n\n// Level 10\nif (text.includes('wuf13') || text.includes('cop29') || text.includes('yusif ganbarov') || text.includes('gemini api') || text.includes('pmp 2026')) score = 10;\n// Level 9\nelse if (text.includes('adhd') || text.includes('investment round') || text.includes('funding')) score = 9;\n// Level 8\nelse if (text.includes('tool') || text.includes('case study') || text.includes('pm')) score = 8;\n// Level 6-7\nelse if (text.includes('ai') || text.includes('startup') || text.includes('business')) score = Math.floor(Math.random() * 2) + 6;\n\nitem.score = score;\nreturn item;"
+      },
+      "name": "Scoring Engine (1-10)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        650,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.score }}",
+              "operation": "largerEqual",
+              "value2": 9
+            }
+          ]
+        }
+      },
+      "name": "Filter: Score >= 9",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        850,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Cron (15m)": {
+      "main": [
+        [
+          {
+            "node": "Fetch Telegram Channels (Mock)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Telegram Channels (Mock)": {
+      "main": [
+        [
+          {
+            "node": "Scoring Engine (1-10)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scoring Engine (1-10)": {
+      "main": [
+        [
+          {
+            "node": "Filter: Score >= 9",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

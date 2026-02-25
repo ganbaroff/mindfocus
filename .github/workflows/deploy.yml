@@ -1,0 +1,47 @@
+name: Deploy Bot to Cloud Run
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "bot/**"
+      - "Dockerfile"
+      - "docker-compose.yml"
+
+env:
+  PROJECT_ID: warm-braid-479608-v0
+  SERVICE: mindfocus
+  REGION: europe-west1
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Google Auth
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: "${{ secrets.GCP_SA_KEY }}"
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy ${{ env.SERVICE }} \
+            --source . \
+            --region ${{ env.REGION }} \
+            --port 8585 \
+            --allow-unauthenticated \
+            --min-instances 1 \
+            --max-instances 1 \
+            --memory 256Mi \
+            --cpu 1 \
+            --set-env-vars "TELEGRAM_TOKEN=${{ secrets.TELEGRAM_TOKEN }},GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}"
