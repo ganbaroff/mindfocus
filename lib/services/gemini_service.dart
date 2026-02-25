@@ -9,7 +9,7 @@ class GeminiService {
   static final GeminiService instance = GeminiService._();
 
   static String get _apiKey => dotenv.env['GEMINI_API_KEY'] ?? '';
-  static const _model = 'gemini-2.5-flash';
+  static const _model = 'gemini-2.0-flash';
   static const _baseUrl =
       'https://generativelanguage.googleapis.com/v1beta/models';
   static const _lang = 'Respond in the same language as the user input.';
