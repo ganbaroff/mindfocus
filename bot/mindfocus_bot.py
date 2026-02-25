@@ -154,7 +154,7 @@ def score_message(text: str) -> int:
 
 # ─── Gemini API ──────────────────────────────────────────────────────────────
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
-GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_API_KEY}"
+GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}"
 LANG_RULE = "Respond in the same language as the user input."
 NO_MARKDOWN = "Do NOT use asterisks, bold (**), italic (*), or any markdown. Use plain text and numbered lists only."
 
