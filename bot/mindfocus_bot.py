@@ -76,12 +76,13 @@ def _save_feed() -> None:
         json.dump(feed[-50:], f, ensure_ascii=False, indent=2)
 
 
-def _push_feed(source: str, text: str, score: int = 5) -> None:
+def _push_feed(source: str, text: str, score: int = 5, summary: str = "") -> None:
     """Push a message to the feed (accessible by Flutter app)."""
     feed.append({
         "id": len(feed) + 1,
         "source": source,
         "text": _clean_markdown(text),
+        "summary": summary,
         "score": score,
         "time": datetime.now().isoformat(),
         "read": False,
@@ -214,14 +215,46 @@ async def _scrape_channel(channel: str) -> list[dict]:
     return posts
 
 
+async def _summarize_post(text: str) -> str:
+    """Generate a concise bullet-point summary of a news post via Gemini."""
+    if not GEMINI_API_KEY:
+        return ""
+    prompt = (
+        "Summarize this Telegram channel post into 2-3 bullet points. "
+        "Each bullet starts with an emoji. Be concise (max 15 words per bullet). "
+        "Focus on: what happened, why it matters, what to do. "
+        "Respond in the same language as the post. No markdown, plain text only."
+    )
+    payload = {
+        "system_instruction": {"parts": [{"text": prompt}]},
+        "contents": [{"role": "user", "parts": [{"text": text}]}],
+    }
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.post(GEMINI_URL, json=payload)
+            resp.raise_for_status()
+            data = resp.json()
+        candidates = data.get("candidates", [])
+        if candidates:
+            parts = candidates[0].get("content", {}).get("parts", [])
+            if parts:
+                return parts[0].get("text", "").strip()
+    except Exception as e:
+        logger.warning("Summarize failed: %s", e)
+    return ""
+
+
 async def run_osint_scan(ctx=None) -> int:
-    """Scrape all OSINT channels, push new posts to feed."""
+    """Scrape all OSINT channels, push new posts to feed. High-score posts get AI summary."""
     total_new = 0
     for ch in OSINT_CHANNELS:
         posts = await _scrape_channel(ch)
         for p in posts:
             score = score_message(p["text"])
-            _push_feed(f"osint:{p['channel']}", p["text"], score)
+            summary = ""
+            if score >= 7:
+                summary = await _summarize_post(p["text"])
+            _push_feed(f"osint:{p['channel']}", p["text"], score, summary=summary)
             total_new += 1
     if total_new > 0:
         logger.info("OSINT: +%d new posts from %d channels", total_new, len(OSINT_CHANNELS))

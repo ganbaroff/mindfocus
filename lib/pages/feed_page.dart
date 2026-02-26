@@ -236,124 +236,239 @@ class _FeedPageState extends State<FeedPage> {
     final score = item['score'] as int? ?? 5;
     final source = item['source'] as String? ?? 'system';
     final text = item['text'] as String? ?? '';
+    final summary = item['summary'] as String? ?? '';
     final timeStr = item['time'] as String? ?? '';
 
     String displayTime = '';
     try {
       final dt = DateTime.parse(timeStr);
-      displayTime =
-          '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+      final now = DateTime.now();
+      final diff = now.difference(dt);
+      if (diff.inMinutes < 60) {
+        displayTime = '${diff.inMinutes}м назад';
+      } else if (diff.inHours < 24) {
+        displayTime = '${diff.inHours}ч назад';
+      } else {
+        displayTime =
+            '${dt.day.toString().padLeft(2, '0')}.${dt.month.toString().padLeft(2, '0')}';
+      }
     } catch (_) {}
 
+    final hasSummary = summary.isNotEmpty;
+
     return GestureDetector(
-      onTap: () {
-        showDialog(
-          context: context,
-          builder: (dCtx) => Dialog(
-            backgroundColor: AppTheme.surfaceLight,
-            shape:
-                RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(children: [
-                    Icon(_sourceIcon(source),
-                        size: 18, color: AppTheme.scoreColor(score)),
-                    const SizedBox(width: 8),
-                    Text(_formatSource(source),
+      onTap: () => _showDetail(item, source, text, summary, score),
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 5),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppTheme.card.withOpacity(score >= 8 ? 0.5 : 0.3),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color:
+                AppTheme.scoreColor(score).withOpacity(score >= 8 ? 0.3 : 0.1),
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header: source + score + time
+            Row(children: [
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: AppTheme.scoreColor(score).withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(_sourceIcon(source),
+                    color: AppTheme.scoreColor(score), size: 16),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(_formatSource(source),
+                    style: TextStyle(
+                        color: AppTheme.scoreColor(score),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700)),
+              ),
+              Text(displayTime,
+                  style: TextStyle(
+                      color: AppTheme.textSecondary.withOpacity(0.5),
+                      fontSize: 10)),
+              const SizedBox(width: 8),
+              AppTheme.scoreBadge(score),
+            ]),
+
+            const SizedBox(height: 10),
+
+            // AI Summary (if available) — prominent glass card
+            if (hasSummary) ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppTheme.primary.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppTheme.accent.withOpacity(0.2)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(children: [
+                      Icon(Icons.auto_awesome,
+                          size: 12, color: AppTheme.accent.withOpacity(0.8)),
+                      const SizedBox(width: 4),
+                      Text('AI Summary',
+                          style: TextStyle(
+                              color: AppTheme.accent.withOpacity(0.8),
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700)),
+                    ]),
+                    const SizedBox(height: 6),
+                    Text(summary,
+                        style: const TextStyle(
+                          color: AppTheme.textPrimary,
+                          fontSize: 13,
+                          height: 1.5,
+                        )),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
+
+            // Post text (bigger context window)
+            Text(
+              text.length > 250 ? '${text.substring(0, 250)}...' : text,
+              style: TextStyle(
+                color: hasSummary
+                    ? AppTheme.textSecondary.withOpacity(0.7)
+                    : AppTheme.textPrimary,
+                fontSize: hasSummary ? 12 : 14,
+                height: 1.4,
+              ),
+              maxLines: hasSummary ? 3 : 6,
+              overflow: TextOverflow.ellipsis,
+            ),
+
+            // "Read more" hint
+            if (text.length > 250)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text('Tap to read more →',
+                    style: TextStyle(
+                        color: AppTheme.accent.withOpacity(0.6),
+                        fontSize: 11,
+                        fontStyle: FontStyle.italic)),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showDetail(Map<String, dynamic> item, String source, String text,
+      String summary, int score) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => DraggableScrollableSheet(
+        initialChildSize: 0.75,
+        maxChildSize: 0.95,
+        minChildSize: 0.4,
+        builder: (_, scrollCtrl) => Container(
+          decoration: const BoxDecoration(
+            color: AppTheme.surfaceLight,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
+            children: [
+              // Handle
+              Container(
+                margin: const EdgeInsets.symmetric(vertical: 12),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppTheme.textSecondary.withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              // Header
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Row(children: [
+                  Icon(_sourceIcon(source),
+                      size: 20, color: AppTheme.scoreColor(score)),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(_formatSource(source),
                         style: TextStyle(
                             color: AppTheme.scoreColor(score),
                             fontWeight: FontWeight.w700,
-                            fontSize: 13)),
-                    const Spacer(),
-                    AppTheme.scoreBadge(score),
-                  ]),
-                  const SizedBox(height: 16),
-                  ConstrainedBox(
-                    constraints: const BoxConstraints(maxHeight: 400),
-                    child: SingleChildScrollView(
-                      child: SelectableText(text,
-                          style: const TextStyle(
-                              color: AppTheme.textPrimary,
-                              fontSize: 14,
-                              height: 1.5)),
-                    ),
+                            fontSize: 15)),
                   ),
-                  const SizedBox(height: 16),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: ElevatedButton(
-                        onPressed: () => Navigator.of(dCtx).pop(),
-                        child: const Text('Close')),
-                  ),
-                ],
+                  AppTheme.scoreBadge(score),
+                ]),
               ),
-            ),
+              const Divider(color: AppTheme.divider, height: 24),
+              // Body
+              Expanded(
+                child: ListView(
+                  controller: scrollCtrl,
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  children: [
+                    if (summary.isNotEmpty) ...[
+                      Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: AppTheme.primary.withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                              color: AppTheme.accent.withOpacity(0.2)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(children: [
+                              const Icon(Icons.auto_awesome,
+                                  size: 14, color: AppTheme.accent),
+                              const SizedBox(width: 6),
+                              const Text('AI Summary',
+                                  style: TextStyle(
+                                      color: AppTheme.accent,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700)),
+                            ]),
+                            const SizedBox(height: 8),
+                            Text(summary,
+                                style: const TextStyle(
+                                    color: AppTheme.textPrimary,
+                                    fontSize: 15,
+                                    height: 1.6)),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      const Text('Original Post',
+                          style: TextStyle(
+                              color: AppTheme.textSecondary,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600)),
+                      const SizedBox(height: 6),
+                    ],
+                    SelectableText(text,
+                        style: const TextStyle(
+                            color: AppTheme.textPrimary,
+                            fontSize: 15,
+                            height: 1.6)),
+                    const SizedBox(height: 40),
+                  ],
+                ),
+              ),
+            ],
           ),
-        );
-      },
-      child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 4),
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: AppTheme.card.withOpacity(0.3),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: AppTheme.scoreColor(score).withOpacity(0.15),
-          ),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Source icon
-            Container(
-              width: 36,
-              height: 36,
-              decoration: BoxDecoration(
-                color: AppTheme.scoreColor(score).withOpacity(0.1),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(_sourceIcon(source),
-                  color: AppTheme.scoreColor(score), size: 18),
-            ),
-            const SizedBox(width: 12),
-            // Content
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    text.length > 120 ? '${text.substring(0, 120)}...' : text,
-                    style: const TextStyle(
-                      color: AppTheme.textPrimary,
-                      fontSize: 13,
-                      height: 1.3,
-                    ),
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 6),
-                  Row(children: [
-                    Text(_formatSource(source),
-                        style: TextStyle(
-                            color: AppTheme.scoreColor(score),
-                            fontSize: 10,
-                            fontWeight: FontWeight.w700)),
-                    const SizedBox(width: 8),
-                    Text(displayTime,
-                        style: TextStyle(
-                            color: AppTheme.textSecondary.withOpacity(0.6),
-                            fontSize: 10)),
-                    const Spacer(),
-                    AppTheme.scoreBadge(score),
-                  ]),
-                ],
-              ),
-            ),
-          ],
         ),
       ),
     );
