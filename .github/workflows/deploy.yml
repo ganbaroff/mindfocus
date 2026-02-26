@@ -44,4 +44,4 @@ jobs:
             --max-instances 1 \
             --memory 256Mi \
             --cpu 1 \
-            --set-env-vars "TELEGRAM_TOKEN=${{ secrets.TELEGRAM_TOKEN }},GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}"
+            --set-env-vars "MINDFOCUS_BOT_TOKEN=${{ secrets.TELEGRAM_TOKEN }},GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }},MINDFOCUS_OWNER_CHAT_ID=5150355926"
