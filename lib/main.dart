@@ -25,7 +25,7 @@ void main() async {
             create: (_) => ThemeProvider(prefs)..loadTheme()),
         ChangeNotifierProvider(
             create: (_) => BrainDumpProvider(prefs)..loadThoughts()),
-        ChangeNotifierProvider(create: (_) => FocusProvider()),
+        ChangeNotifierProvider(create: (_) => FocusProvider()..loadData(prefs)),
         ChangeNotifierProvider(
             create: (_) => FinanceProvider(prefs)..loadFinanceData()),
       ],

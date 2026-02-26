@@ -203,8 +203,10 @@ async def _scrape_channel(channel: str) -> list[dict]:
             resp = await client.get(url, headers={"User-Agent": "Mozilla/5.0"})
             if resp.status_code != 200:
                 return []
+        # Force UTF-8 decoding for proper Cyrillic support
+        html_text = resp.content.decode("utf-8", errors="replace")
         parser = _TelegramHTMLParser()
-        parser.feed(resp.text)
+        parser.feed(html_text)
         for text in parser._texts[-5:]:
             post_id = f"{channel}:{hash(text[:100])}"
             if post_id not in _seen_posts:

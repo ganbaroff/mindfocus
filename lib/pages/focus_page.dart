@@ -26,7 +26,7 @@ class FocusPage extends StatelessWidget {
                     color: AppTheme.textPrimary)),
             const SizedBox(height: 8),
             Text(
-              'Sessions today: ${p.sessionsToday}',
+              '${p.sessionsToday} sessions  ·  ${p.totalMinutesToday} min today',
               style: TextStyle(
                   color: AppTheme.accent,
                   fontSize: 14,

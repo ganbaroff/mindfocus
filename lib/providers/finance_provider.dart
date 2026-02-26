@@ -6,6 +6,7 @@ class FinanceProvider with ChangeNotifier {
   final SharedPreferences _prefs;
   double _budget = 2500;
   double _spent = 0;
+  double _income = 0;
   List<Map<String, dynamic>> _expenses = [];
 
   static const categories = [
@@ -21,7 +22,8 @@ class FinanceProvider with ChangeNotifier {
 
   double get budget => _budget;
   double get spent => _spent;
-  double get freeMoney => _budget - _spent;
+  double get income => _income;
+  double get freeMoney => _budget - _spent + _income;
   double get spentPercent => _budget > 0 ? (_spent / _budget).clamp(0, 1) : 0;
   List<Map<String, dynamic>> get expenses => _expenses;
   List<String> get history =>
@@ -38,13 +40,28 @@ class FinanceProvider with ChangeNotifier {
 
   void add(double amt, {String category = 'Other'}) {
     if (amt <= 0) return;
-    _spent += amt;
     _expenses.insert(0, {
       'amount': amt,
       'category': category,
       'time': DateTime.now().toIso8601String(),
     });
+    _recalculate();
     _save();
+    notifyListeners();
+  }
+
+  void deleteExpense(int index) {
+    if (index < 0 || index >= _expenses.length) return;
+    _expenses.removeAt(index);
+    _recalculate();
+    _save();
+    notifyListeners();
+  }
+
+  void addIncome(double amt) {
+    if (amt <= 0) return;
+    _income += amt;
+    _prefs.setDouble('income', _income);
     notifyListeners();
   }
 
@@ -55,14 +72,47 @@ class FinanceProvider with ChangeNotifier {
   }
 
   void loadFinanceData() {
-    _spent = _prefs.getDouble('spent') ?? 0;
     _budget = _prefs.getDouble('budget') ?? 2500;
+    _income = _prefs.getDouble('income') ?? 0;
     final raw = _prefs.getString('expenses_v2');
     if (raw != null) {
       final List<dynamic> decoded = jsonDecode(raw);
       _expenses = decoded.cast<Map<String, dynamic>>();
     }
+
+    // Check monthly reset
+    _checkMonthlyReset();
+
+    // Always recalculate _spent from actual expenses (fixes desync)
+    _recalculate();
     notifyListeners();
+  }
+
+  void _recalculate() {
+    _spent = 0;
+    for (var e in _expenses) {
+      _spent += (e['amount'] as double?) ?? 0;
+    }
+  }
+
+  void _checkMonthlyReset() {
+    final now = DateTime.now();
+    final currentMonth = '${now.year}-${now.month}';
+    final savedMonth = _prefs.getString('finance_month') ?? '';
+
+    if (savedMonth != currentMonth) {
+      // New month — archive old expenses, reset
+      if (_expenses.isNotEmpty) {
+        final archiveKey = 'expenses_archive_$savedMonth';
+        _prefs.setString(archiveKey, jsonEncode(_expenses));
+      }
+      _expenses.clear();
+      _spent = 0;
+      _income = 0;
+      _prefs.setDouble('income', 0);
+      _prefs.setString('finance_month', currentMonth);
+      _save();
+    }
   }
 
   void _save() {

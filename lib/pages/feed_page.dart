@@ -20,7 +20,7 @@ class _FeedPageState extends State<FeedPage> {
 
   static const _cloudUrl =
       'https://mindfocus-827100239570.europe-west1.run.app/feed';
-  String _feedUrl = _cloudUrl;
+  final String _feedUrl = _cloudUrl;
 
   @override
   void initState() {
@@ -37,7 +37,9 @@ class _FeedPageState extends State<FeedPage> {
 
   Future<void> _fetchFeed() async {
     try {
-      final resp = await http.get(Uri.parse(_feedUrl));
+      final resp = await http
+          .get(Uri.parse(_feedUrl))
+          .timeout(const Duration(seconds: 15));
       if (resp.statusCode == 200) {
         final List<dynamic> data = jsonDecode(resp.body);
         setState(() {
@@ -47,10 +49,15 @@ class _FeedPageState extends State<FeedPage> {
         });
       }
     } catch (e) {
-      setState(() {
-        _loading = false;
-        _error = 'Bot offline — start Docker container';
-      });
+      if (_items.isEmpty) {
+        setState(() {
+          _loading = false;
+          _error = 'Connecting to Cloud... Retry in 3s';
+        });
+        // Auto-retry once after cold-start delay
+        Future.delayed(
+            const Duration(seconds: 3), () => mounted ? _fetchFeed() : null);
+      }
     }
   }
 

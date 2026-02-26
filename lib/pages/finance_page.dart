@@ -113,36 +113,54 @@ class FinancePage extends StatelessWidget {
                         fontWeight: FontWeight.w600,
                         letterSpacing: 1)),
                 const SizedBox(height: 8),
-                ...p.expenses.take(10).map((e) {
+                ...p.expenses.take(10).toList().asMap().entries.map((entry) {
+                  final idx = entry.key;
+                  final e = entry.value;
                   final cat = FinanceProvider.categories.firstWhere(
                     (c) => c['name'] == e['category'],
                     orElse: () => FinanceProvider.categories.last,
                   );
-                  return Container(
-                    margin: const EdgeInsets.symmetric(vertical: 3),
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 12),
-                    decoration: BoxDecoration(
-                      color: AppTheme.surfaceLight.withOpacity(0.5),
-                      borderRadius: BorderRadius.circular(12),
+                  return Dismissible(
+                    key: ValueKey('expense_${e['time']}_$idx'),
+                    direction: DismissDirection.endToStart,
+                    background: Container(
+                      margin: const EdgeInsets.symmetric(vertical: 3),
+                      padding: const EdgeInsets.only(right: 20),
+                      decoration: BoxDecoration(
+                        color: AppTheme.danger.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      alignment: Alignment.centerRight,
+                      child: const Icon(Icons.delete_outline,
+                          color: AppTheme.danger, size: 20),
                     ),
-                    child: Row(
-                      children: [
-                        Text(cat['icon'] as String,
-                            style: const TextStyle(fontSize: 20)),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(cat['name'] as String,
+                    onDismissed: (_) => p.deleteExpense(idx),
+                    child: Container(
+                      margin: const EdgeInsets.symmetric(vertical: 3),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: AppTheme.surfaceLight.withOpacity(0.5),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        children: [
+                          Text(cat['icon'] as String,
+                              style: const TextStyle(fontSize: 20)),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(cat['name'] as String,
+                                style: const TextStyle(
+                                    color: AppTheme.textPrimary, fontSize: 14)),
+                          ),
+                          Text(
+                              '-${(e['amount'] as double).toStringAsFixed(0)} AZN',
                               style: const TextStyle(
-                                  color: AppTheme.textPrimary, fontSize: 14)),
-                        ),
-                        Text(
-                            '-${(e['amount'] as double).toStringAsFixed(0)} AZN',
-                            style: const TextStyle(
-                                color: AppTheme.danger,
-                                fontWeight: FontWeight.w600,
-                                fontSize: 14)),
-                      ],
+                                  color: AppTheme.danger,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 14)),
+                        ],
+                      ),
                     ),
                   );
                 }),

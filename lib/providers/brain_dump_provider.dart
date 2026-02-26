@@ -51,7 +51,7 @@ class BrainDumpProvider with ChangeNotifier {
         });
       }
     }
-    print("History Loaded: ${_history.length} items");
+    debugPrint("History Loaded: ${_history.length} items");
   }
 
   Future<String> processThought(String thought) async {
