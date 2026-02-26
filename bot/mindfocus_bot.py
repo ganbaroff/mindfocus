@@ -9,6 +9,7 @@ import json
 import os
 import re
 import httpx
+from html.parser import HTMLParser
 from dotenv import load_dotenv
 from datetime import time, timezone, timedelta, datetime
 from aiohttp import web
@@ -150,6 +151,90 @@ def score_message(text: str) -> int:
     if any(kw in t for kw in SCORE_8):  return 8
     if any(kw in t for kw in SCORE_67): return 7
     return 5
+
+
+# ─── OSINT Channel Scraper ───────────────────────────────────────────────────
+OSINT_CHANNELS = [
+    "ai_newz",          # AI новости
+    "neurochannel",     # Нейроканал от Tproger
+    "temno",            # Тёмная сторона — Морейнис
+    "startupoftheday",  # Стартап дня — Горный
+    "pmclub",           # PMCLUB
+    "investfuture",     # InvestFuture
+]
+
+# Track seen post IDs to avoid duplicates
+_seen_posts: set[str] = set()
+
+
+class _TelegramHTMLParser(HTMLParser):
+    """Extracts text from t.me/s/ channel preview pages."""
+    def __init__(self):
+        super().__init__()
+        self._in_msg = False
+        self._texts: list[str] = []
+        self._current = ""
+
+    def handle_starttag(self, tag, attrs):
+        classes = dict(attrs).get("class", "")
+        if "tgme_widget_message_text" in classes:
+            self._in_msg = True
+            self._current = ""
+
+    def handle_endtag(self, tag):
+        if self._in_msg and tag == "div":
+            self._in_msg = False
+            text = self._current.strip()
+            if text and len(text) > 30:
+                self._texts.append(text)
+
+    def handle_data(self, data):
+        if self._in_msg:
+            self._current += data
+
+
+async def _scrape_channel(channel: str) -> list[dict]:
+    """Fetch recent posts from a public Telegram channel via t.me/s/ preview."""
+    url = f"https://t.me/s/{channel}"
+    posts = []
+    try:
+        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+            resp = await client.get(url, headers={"User-Agent": "Mozilla/5.0"})
+            if resp.status_code != 200:
+                return []
+        parser = _TelegramHTMLParser()
+        parser.feed(resp.text)
+        for text in parser._texts[-5:]:
+            post_id = f"{channel}:{hash(text[:100])}"
+            if post_id not in _seen_posts:
+                _seen_posts.add(post_id)
+                posts.append({"channel": channel, "text": text[:500]})
+    except Exception as e:
+        logger.warning("OSINT scrape %s failed: %s", channel, e)
+    return posts
+
+
+async def run_osint_scan(ctx=None) -> int:
+    """Scrape all OSINT channels, push new posts to feed."""
+    total_new = 0
+    for ch in OSINT_CHANNELS:
+        posts = await _scrape_channel(ch)
+        for p in posts:
+            score = score_message(p["text"])
+            _push_feed(f"osint:{p['channel']}", p["text"], score)
+            total_new += 1
+    if total_new > 0:
+        logger.info("OSINT: +%d new posts from %d channels", total_new, len(OSINT_CHANNELS))
+    return total_new
+
+
+async def scheduled_osint(ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    """Scheduled job: run OSINT scan every 30 min."""
+    if not automations_active:
+        return
+    count = await run_osint_scan(ctx)
+    if count > 0:
+        logger.info("OSINT scheduled scan: %d new items", count)
 
 
 # ─── Gemini API ──────────────────────────────────────────────────────────────
@@ -325,7 +410,17 @@ async def handle_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 async def morning_digest(ctx: ContextTypes.DEFAULT_TYPE) -> None:
     if not automations_active:
         return
-    msg = "08:00 Morning Digest\nOSINT sources: activating after n8n."
+    # Run OSINT scan first
+    count = await run_osint_scan(ctx)
+    high = [f for f in feed if f.get('score', 0) >= 8]
+    msg = (
+        f"08:00 Morning Digest\n"
+        f"OSINT: {count} new posts scraped\n"
+        f"High priority (8+): {len(high)} items\n"
+    )
+    if high:
+        for h in high[-3:]:
+            msg += f"\n- [{h.get('source','')}] {h['text'][:80]}..."
     _push_feed("digest", msg, 6)
     await ctx.bot.send_message(OWNER_CHAT_ID, msg)
 
@@ -359,6 +454,11 @@ def main() -> None:
     # Start HTTP feed server
     loop.run_until_complete(start_http_server())
 
+    # Run initial OSINT scan on startup
+    logger.info("Running initial OSINT scan...")
+    count = loop.run_until_complete(run_osint_scan())
+    logger.info("OSINT startup: %d posts collected", count)
+
     app = Application.builder().token(BOT_TOKEN).build()
 
     app.add_handler(CommandHandler("start", cmd_start))
@@ -377,8 +477,9 @@ def main() -> None:
     jq = app.job_queue
     jq.run_daily(morning_digest, time=time(8, 0, tzinfo=baku_tz))
     jq.run_daily(evening_rca, time=time(19, 0, tzinfo=baku_tz))
+    jq.run_repeating(scheduled_osint, interval=1800, first=60)  # every 30 min
 
-    logger.info("MindFocus Bot operational. Feed API on :%d. Polling...", FEED_PORT)
+    logger.info("MindFocus Bot operational. Feed API on :%d. OSINT every 30min. Polling...", FEED_PORT)
     app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 

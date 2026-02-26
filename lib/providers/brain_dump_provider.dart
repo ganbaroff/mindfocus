@@ -10,6 +10,7 @@ class BrainDumpProvider with ChangeNotifier {
   final List<Map<String, String>> _history = [];
 
   BrainDumpProvider(this._prefs) {
+    loadThoughts();
     loadHistory();
   }
 

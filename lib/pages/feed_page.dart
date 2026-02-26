@@ -18,7 +18,9 @@ class _FeedPageState extends State<FeedPage> {
   Timer? _poller;
   String _filter = 'all'; // all, high, ai, pm, biz
 
-  static const _feedUrl = 'http://localhost:8585/feed';
+  static const _cloudUrl =
+      'https://mindfocus-827100239570.europe-west1.run.app/feed';
+  String _feedUrl = _cloudUrl;
 
   @override
   void initState() {
