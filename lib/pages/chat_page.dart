@@ -1,8 +1,10 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/chat_message.dart';
 import '../services/gemini_service.dart';
+import '../services/voice_service.dart';
 import '../theme/app_theme.dart';
 
 class ChatPage extends StatefulWidget {
@@ -16,6 +18,7 @@ class _ChatPageState extends State<ChatPage> {
   final ScrollController _sc = ScrollController();
   final List<ChatMessage> _msgs = [];
   bool _loading = false;
+  bool _isRecording = false;
 
   final _gemini = GeminiService.instance;
 
@@ -95,6 +98,36 @@ class _ChatPageState extends State<ChatPage> {
     });
   }
 
+  Future<void> _startVoice() async {
+    setState(() => _isRecording = true);
+    final text = await VoiceService.instance.listen();
+    setState(() => _isRecording = false);
+    if (text.isNotEmpty) {
+      _tc.text = text;
+      _tc.selection =
+          TextSelection.fromPosition(TextPosition(offset: text.length));
+    }
+  }
+
+  void _exportChat() {
+    if (_msgs.isEmpty) return;
+    final buffer = StringBuffer();
+    buffer.writeln('MindFocus Chat Export');
+    buffer.writeln('=' * 40);
+    for (final m in _msgs) {
+      final label = m.role == 'user' ? '👤 You' : '🤖 AI';
+      buffer.writeln('\n$label:');
+      buffer.writeln(m.text);
+    }
+    // Copy to clipboard
+    Clipboard.setData(ClipboardData(text: buffer.toString()));
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+          content: Text('Chat copied to clipboard ✅'),
+          duration: Duration(seconds: 2)),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -104,7 +137,12 @@ class _ChatPageState extends State<ChatPage> {
         appBar: AppBar(
           title: const Text('AI Chat'),
           actions: [
-            if (_msgs.isNotEmpty)
+            if (_msgs.isNotEmpty) ...[
+              IconButton(
+                icon: const Icon(Icons.copy, size: 18),
+                tooltip: 'Export chat',
+                onPressed: _exportChat,
+              ),
               IconButton(
                 icon: const Icon(Icons.delete_sweep, size: 20),
                 onPressed: () {
@@ -133,6 +171,7 @@ class _ChatPageState extends State<ChatPage> {
                   );
                 },
               ),
+            ],
           ],
         ),
         body: Column(children: [
@@ -278,7 +317,29 @@ class _ChatPageState extends State<ChatPage> {
                   ),
                 ),
               ),
-              const SizedBox(width: 8),
+              const SizedBox(width: 6),
+              // Mic button
+              if (VoiceService.isSupported)
+                GestureDetector(
+                  onTap: _loading || _isRecording ? null : _startVoice,
+                  child: Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: _isRecording
+                          ? AppTheme.danger.withOpacity(0.2)
+                          : AppTheme.surfaceLight,
+                    ),
+                    child: Icon(_isRecording ? Icons.mic : Icons.mic_none,
+                        color: _isRecording
+                            ? AppTheme.danger
+                            : AppTheme.textSecondary,
+                        size: 20),
+                  ),
+                ),
+              const SizedBox(width: 6),
+              // Send button
               GestureDetector(
                 onTap: _loading ? null : () => _send(),
                 child: Container(

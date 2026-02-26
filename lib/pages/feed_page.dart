@@ -17,6 +17,8 @@ class _FeedPageState extends State<FeedPage> {
   String? _error;
   Timer? _poller;
   String _filter = 'all'; // all, high, ai, pm, biz
+  String _searchQuery = '';
+  final TextEditingController _searchController = TextEditingController();
 
   static const _cloudUrl =
       'https://mindfocus-827100239570.europe-west1.run.app/feed';
@@ -32,6 +34,7 @@ class _FeedPageState extends State<FeedPage> {
   @override
   void dispose() {
     _poller?.cancel();
+    _searchController.dispose();
     super.dispose();
   }
 
@@ -62,30 +65,46 @@ class _FeedPageState extends State<FeedPage> {
   }
 
   List<Map<String, dynamic>> get _filtered {
+    List<Map<String, dynamic>> res;
     switch (_filter) {
       case 'high':
-        return _items.where((i) => (i['score'] ?? 0) >= 8).toList();
+        res = _items.where((i) => (i['score'] ?? 0) >= 8).toList();
+        break;
       case 'ai':
-        return _items.where((i) {
+        res = _items.where((i) {
           final s = (i['source'] ?? '').toString().toLowerCase();
           return s.contains('ai') || s.contains('neural') || s == 'ai';
         }).toList();
+        break;
       case 'pm':
-        return _items.where((i) {
+        res = _items.where((i) {
           final s = (i['source'] ?? '').toString().toLowerCase();
           return s.contains('pm') || s.contains('agile');
         }).toList();
+        break;
       case 'biz':
-        return _items.where((i) {
+        res = _items.where((i) {
           final s = (i['source'] ?? '').toString().toLowerCase();
           return s.contains('startup') ||
               s.contains('venture') ||
               s.contains('invest') ||
               s.contains('temno');
         }).toList();
+        break;
       default:
-        return _items;
+        res = _items;
     }
+
+    if (_searchQuery.isNotEmpty) {
+      final q = _searchQuery.toLowerCase();
+      res = res.where((i) {
+        final title = (i['title'] ?? '').toString().toLowerCase();
+        final text = (i['text'] ?? '').toString().toLowerCase();
+        final summary = (i['summary'] ?? '').toString().toLowerCase();
+        return title.contains(q) || text.contains(q) || summary.contains(q);
+      }).toList();
+    }
+    return res;
   }
 
   IconData _sourceIcon(String source) {
@@ -145,6 +164,40 @@ class _FeedPageState extends State<FeedPage> {
         ),
         body: Column(
           children: [
+            // Search Bar
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+              child: TextField(
+                controller: _searchController,
+                onChanged: (val) => setState(() => _searchQuery = val),
+                style:
+                    const TextStyle(color: AppTheme.textPrimary, fontSize: 14),
+                decoration: InputDecoration(
+                  hintText: 'Search feed...',
+                  hintStyle:
+                      TextStyle(color: AppTheme.textSecondary.withOpacity(0.5)),
+                  prefixIcon: const Icon(Icons.search,
+                      color: AppTheme.textSecondary, size: 20),
+                  suffixIcon: _searchQuery.isNotEmpty
+                      ? IconButton(
+                          icon: const Icon(Icons.clear,
+                              color: AppTheme.textSecondary, size: 16),
+                          onPressed: () {
+                            _searchController.clear();
+                            setState(() => _searchQuery = '');
+                          },
+                        )
+                      : null,
+                  filled: true,
+                  fillColor: AppTheme.surfaceLight.withOpacity(0.5),
+                  contentPadding: const EdgeInsets.symmetric(vertical: 0),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+            ),
             // Filter chips
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),

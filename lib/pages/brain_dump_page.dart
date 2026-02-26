@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../providers/brain_dump_provider.dart';
+import '../services/voice_service.dart';
 import '../theme/app_theme.dart';
 
 class BrainDumpPage extends StatelessWidget {
@@ -190,6 +191,7 @@ class BrainDumpPage extends StatelessWidget {
 
   void _showAddSheet(BuildContext context, BrainDumpProvider p) {
     final c = TextEditingController();
+    bool recording = false;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -223,18 +225,49 @@ class BrainDumpPage extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 16),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: () {
-                if (c.text.trim().isNotEmpty) {
-                  p.addThought(c.text.trim());
-                  Navigator.pop(ctx);
-                }
-              },
-              child: const Text('Save Thought'),
+          Row(children: [
+            Expanded(
+              child: ElevatedButton(
+                onPressed: () {
+                  if (c.text.trim().isNotEmpty) {
+                    p.addThought(c.text.trim());
+                    Navigator.pop(ctx);
+                  }
+                },
+                child: const Text('Save Thought'),
+              ),
             ),
-          ),
+            if (VoiceService.isSupported) ...[
+              const SizedBox(width: 8),
+              StatefulBuilder(builder: (bCtx, setBtnState) {
+                return GestureDetector(
+                  onTap: () async {
+                    setBtnState(() => recording = true);
+                    final text = await VoiceService.instance.listen();
+                    setBtnState(() => recording = false);
+                    if (text.isNotEmpty) {
+                      c.text = '${c.text} $text'.trim();
+                      c.selection = TextSelection.fromPosition(
+                          TextPosition(offset: c.text.length));
+                    }
+                  },
+                  child: Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: recording
+                          ? AppTheme.danger.withOpacity(0.2)
+                          : AppTheme.primary.withOpacity(0.15),
+                    ),
+                    child: Icon(recording ? Icons.mic : Icons.mic_none,
+                        color: recording ? AppTheme.danger : AppTheme.primary,
+                        size: 22),
+                  ),
+                );
+              }),
+            ],
+          ]),
           const SizedBox(height: 20),
         ]),
       ),

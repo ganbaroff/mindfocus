@@ -40,6 +40,7 @@ FEED_PORT = 8585
 automations_active = True
 history: list[dict] = []
 feed: list[dict] = []
+_bot_instance = None
 
 
 def _load_history() -> None:
@@ -217,15 +218,17 @@ async def _scrape_channel(channel: str) -> list[dict]:
     return posts
 
 
-async def _summarize_post(text: str) -> str:
-    """Generate a concise bullet-point summary of a news post via Gemini."""
+async def _summarize_post(text: str) -> tuple[str, str]:
+    """Generate a concise bullet-point summary and category tag via Gemini."""
     if not GEMINI_API_KEY:
-        return ""
+        return "", ""
     prompt = (
         "Summarize this Telegram channel post into 2-3 bullet points. "
         "Each bullet starts with an emoji. Be concise (max 15 words per bullet). "
         "Focus on: what happened, why it matters, what to do. "
-        "Respond in the same language as the post. No markdown, plain text only."
+        "Respond in the same language as the post. No markdown except bullet points. "
+        "\nIMPORTANT: At the very end of your response, on a new line, write exactly ONE "
+        "hashtag category chosen from: #ai, #pm, #biz, #finance, #other."
     )
     payload = {
         "system_instruction": {"parts": [{"text": prompt}]},
@@ -240,10 +243,18 @@ async def _summarize_post(text: str) -> str:
         if candidates:
             parts = candidates[0].get("content", {}).get("parts", [])
             if parts:
-                return parts[0].get("text", "").strip()
+                res = parts[0].get("text", "").strip()
+                lines = res.split('\n')
+                tag = ""
+                if lines:
+                    last_line = lines[-1].strip()
+                    if last_line.startswith('#') and len(last_line.split()) == 1:
+                        tag = last_line
+                        res = '\n'.join(lines[:-1]).strip()
+                return res, tag
     except Exception as e:
         logger.warning("Summarize failed: %s", e)
-    return ""
+    return "", ""
 
 
 async def run_osint_scan(ctx=None) -> int:
@@ -254,9 +265,25 @@ async def run_osint_scan(ctx=None) -> int:
         for p in posts:
             score = score_message(p["text"])
             summary = ""
+            tag = ""
             if score >= 7:
-                summary = await _summarize_post(p["text"])
-            _push_feed(f"osint:{p['channel']}", p["text"], score, summary=summary)
+                summary, tag = await _summarize_post(p["text"])
+            
+            source_tag = tag.replace('#', '').lower() if tag else p['channel']
+            if source_tag in ('ai', 'pm', 'biz', 'finance'):
+                source = source_tag
+            else:
+                source = f"osint:{p['channel']}"
+                
+            _push_feed(source, p["text"], score, summary=summary)
+            
+            # Send alert for very high value items
+            if score >= 9 and _bot_instance and OWNER_CHAT_ID:
+                alert_text = f"🔥 PRIORITY ALERT (Score {score})\n\n{summary if summary else p['text'][:200]}\n\nSource: {source}"
+                try:
+                    await _bot_instance.send_message(chat_id=OWNER_CHAT_ID, text=alert_text)
+                except Exception as e:
+                    logger.error("Failed to send priority alert: %s", e)
             total_new += 1
     if total_new > 0:
         logger.info("OSINT: +%d new posts from %d channels", total_new, len(OSINT_CHANNELS))
@@ -495,6 +522,8 @@ def main() -> None:
     logger.info("OSINT startup: %d posts collected", count)
 
     app = Application.builder().token(BOT_TOKEN).build()
+    global _bot_instance
+    _bot_instance = app.bot
 
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("stop", cmd_stop))
